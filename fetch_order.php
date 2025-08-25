@@ -1,10 +1,7 @@
 <?php
 header('Content-Type: application/json');
 
-$host = 'localhost';
-$dbname = 'cvfood';
-$user = 'cvfood';
-$pass = 'Nums135790!!';
+include 'db_config.php';
 
 // DB 연결
 $conn = new mysqli($host, $user, $pass, $dbname);

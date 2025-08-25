@@ -2,10 +2,7 @@
 session_start();
 
 // DB 연결 정보
-$host = 'localhost';
-$dbname = 'cvfood';
-$user = 'cvfood';
-$pass = 'Nums135790!!';
+include 'db_config.php';
 
 if (isset($_COOKIE['auto_login'])) {
     $token = $_COOKIE['auto_login'];

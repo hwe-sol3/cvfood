@@ -1,20 +1,20 @@
 <?php
 include 'auth.php'; // 세션 체크
+include 'db_config.php';
+// DB 연결
+$conn = new mysqli($host,$user,$pass,$dbname);
+if($conn->connect_error){ die("DB 연결 실패: ".$conn->connect_error); }
+
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_level'])) {
     header("Location: login.php"); exit;
 }
 $user_id = $_SESSION['user_id'];
 $user_level = $_SESSION['user_level'];
-// 접근 제한: 레벨 5, 7만 허용
-if (!in_array($user_level, [5,7])) {
+// 접근 제한: 레벨 5, 6, 7, 9만 허용
+if (!in_array($user_level, [5,6,7,9])) {
     die("접근 권한이 없습니다.");
 }
 date_default_timezone_set("Asia/Seoul");
-
-// DB 연결
-$host='localhost'; $dbname='cvfood'; $user='cvfood'; $pass='Nums135790!!';
-$conn = new mysqli($host,$user,$pass,$dbname);
-if($conn->connect_error){ die("DB 연결 실패: ".$conn->connect_error); }
 
 // 공휴일 조회 함수
 function getHolidays($conn) {

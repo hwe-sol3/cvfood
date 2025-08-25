@@ -1,10 +1,6 @@
 <?php
 session_start();
-
-$host = 'localhost';
-$dbname = 'cvfood';
-$user = 'cvfood';
-$pass = 'Nums135790!!';
+include 'db_config.php';
 $conn = new mysqli($host, $user, $pass, $dbname);
 if ($conn->connect_error) die("DB 연결 실패: ".$conn->connect_error);
 

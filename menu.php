@@ -13,7 +13,7 @@ if (isset($_GET['code']) && $_GET['code'] === 'cvfood2025') {
     if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_level'])) {
         header("Location: login.php"); exit;
     }
-    if (!in_array($_SESSION['user_level'], [1,5,6,7])) {
+    if (!in_array($_SESSION['user_level'], [1,5,6,7,9])) {
         die("접근 권한이 없습니다.");
     }
     $is_company_admin = false;

@@ -1,16 +1,12 @@
 <?php
 session_start();
+include 'db_config.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = $_POST['user_id'] ?? '';
     $user_pw = $_POST['user_pw'] ?? '';
     $remember_id = isset($_POST['remember_id']);
     $auto_login = isset($_POST['auto_login']);
-
-    $host = 'localhost';
-    $dbname = 'cvfood';
-    $user = 'cvfood';
-    $pass = 'Nums135790!!';
 
     try {
         $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $pass);

@@ -8,13 +8,14 @@ include 'auth.php';
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_level'])) {
     header("Location: login.php"); exit;
 }
-if (!in_array($_SESSION['user_level'], [5,6,7])) {
+if (!in_array($_SESSION['user_level'], [6,7,9])) {
     die("접근 권한이 없습니다.");
 }
 $userId = $_SESSION['user_id'];
 
 // DB 연결 (경로 그대로, PDO 직접 생성)
-$pdo = new PDO("mysql:host=localhost;dbname=cvfood;charset=utf8mb4", "cvfood", "Nums135790!!", [
+include 'db_config.php';
+$pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $pass, [
     PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC
 ]);

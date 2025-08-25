@@ -1,5 +1,10 @@
 <?php
 include 'auth.php'; // 세션 체크
+include 'db_config.php';
+// DB 연결
+$conn = new mysqli($host,$user,$pass,$dbname);
+if($conn->connect_error){ die("DB 연결 실패: ".$conn->connect_error); }
+
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php"); exit;
 }
@@ -7,11 +12,6 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $user_level = $_SESSION['user_level'];
 date_default_timezone_set("Asia/Seoul");
-
-// DB 연결
-$host='localhost'; $dbname='cvfood'; $user='cvfood'; $pass='Nums135790!!';
-$conn = new mysqli($host,$user,$pass,$dbname);
-if($conn->connect_error){ die("DB 연결 실패: ".$conn->connect_error); }
 
 // 관리자 모드 체크 (레벨 7만 관리자)
 $is_admin = in_array($user_level, [7]);
@@ -441,9 +441,6 @@ body{
   <div class="table-section">
     <div class="table-header">
       <h2>주문 상세 목록</h2>
-      <div class="result-count">
-        총 <?php echo number_format($total_count); ?>건 <?php echo $total_pages > 1 ? "({$page}/{$total_pages}페이지)" : ''; ?>
-      </div>
     </div>
     
     <div class="table-container">

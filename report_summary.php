@@ -1,4 +1,10 @@
 <?php
+include 'db_config.php';
+$conn = new mysqli($host, $user, $pass, $dbname);
+if ($conn->connect_error) {
+    die("DB 연결 실패: " . $conn->connect_error);
+}
+
 // 타임존 고정 (서버 기본값이 UTC일 때 마감/카운트다운 어긋나는 문제 방지)
 date_default_timezone_set('Asia/Seoul');
 
@@ -24,15 +30,6 @@ if (isset($_GET['code']) && $_GET['code'] === 'cvfood2025') {
         die("접근 권한이 없습니다.");
     }
     $is_company_admin = false;
-}
-
-$host = 'localhost';
-$dbname = 'cvfood';
-$user = 'cvfood';
-$pass = 'Nums135790!!';
-$conn = new mysqli($host, $user, $pass, $dbname);
-if ($conn->connect_error) {
-    die("DB 연결 실패: " . $conn->connect_error);
 }
 
 // 현재 시간 정보

@@ -1,17 +1,20 @@
 <?php
 declare(strict_types=1);
-include 'auth.php';
 
-// 5 또는 7만
-if (!isset($_SESSION['user_id']) || !in_array((int)$_SESSION['user_level'], [6,7], true)) {
+// 접근 권한: 레벨 5 또는 7,9 허용
+// 세션 없으면 로그인 페이지로
+include 'auth.php';
+if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_level'])) {
     header("Location: login.php"); exit;
-}else {
+}
+if (!in_array($_SESSION['user_level'], [6,7,9])) {
     die("접근 권한이 없습니다.");
 }
 $userId = $_SESSION['user_id'];
 
 // DB
-$pdo = new PDO("mysql:host=localhost;dbname=cvfood;charset=utf8mb4", "cvfood", "Nums135790!!", [
+include 'db_config.php';
+$pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8", $user, $pass, [
     PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC
 ]);
@@ -153,7 +156,6 @@ function wday($dt){ $d=strtotime($dt); $w=['일','월','화','수','목','금','
 
     <div class="right">
       <a class="btn btn-outline" href="external_order.php">이전</a>
-      <a class="btn btn-outline" href="index.php">처음</a>
     </div>
   </div>
 

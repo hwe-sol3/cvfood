@@ -1,5 +1,6 @@
 <?php
 session_start();
+include 'db_config.php';
 header('Content-Type: application/json; charset=utf-8');
 
 $raw = file_get_contents('php://input');
@@ -19,7 +20,7 @@ if (!isset($_SESSION['user_id']) || $_SESSION['user_id'] !== $user_id) {
   echo json_encode(['ok'=>false, 'msg'=>'forbidden']); exit;
 }
 
-$host='localhost'; $dbname='cvfood'; $user='cvfood'; $pass='Nums135790!!';
+
 $conn = new mysqli($host,$user,$pass,$dbname);
 if($conn->connect_error){ http_response_code(500); echo json_encode(['ok'=>false,'msg'=>'db error']); exit; }
 
