@@ -21,7 +21,7 @@ if (isset($_GET['download']) && $_GET['download'] === 'csv') {
     header('Content-Disposition: attachment; filename=order_report_' . $month_start . '_to_' . $month_end . '.csv');
 
     $output = fopen('php://output', 'w');
-    fputcsv($output, ['아이디', '날짜', '점심 주문량', '저녁 주문량']);
+    fputcsv($output, ['user_id', 'date', 'lunch', 'dinner']);
 
     $sql = "SELECT o.user_id, o.date,
             SUM(COALESCE(o.lunch,0)+COALESCE(o.lunch_salad,0)) AS lunch_total,
@@ -43,7 +43,7 @@ if (isset($_GET['download']) && $_GET['download'] === 'csv') {
 
     while ($row = $result->fetch_assoc()) {
         if ($current_user !== null && $current_user !== $row['user_id']) {
-            fputcsv($output, [$current_user, '합계', $total_lunch, $total_dinner]);
+            fputcsv($output, [$current_user, 'total', $total_lunch, $total_dinner]);
             $total_lunch = 0;
             $total_dinner = 0;
         }
@@ -55,7 +55,7 @@ if (isset($_GET['download']) && $_GET['download'] === 'csv') {
     }
 
     if ($current_user !== null) {
-        fputcsv($output, [$current_user, '합계', $total_lunch, $total_dinner]);
+        fputcsv($output, [$current_user, 'total', $total_lunch, $total_dinner]);
     }
 
     fclose($output);
