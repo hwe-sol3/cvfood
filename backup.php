@@ -33,7 +33,7 @@ try {
     }
 
     // ZIP 파일 이름에 생성 시간 포함
-    $now = date('Ymd_Hi'); // YYYYMMDD_HHmm
+    $now = date('Ymd'); // YYYYMMDD
     $zipFile = $backupDir . "/db_backup_{$now}.zip";
 
     $zip = new ZipArchive();
@@ -61,3 +61,4 @@ try {
 } catch (Exception $e) {
     exit("❌ DB 백업 실패: " . $e->getMessage());
 }
+
