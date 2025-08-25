@@ -15,6 +15,7 @@ try {
 
     $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
 
+    // CSV 파일 생성
     foreach ($tables as $table) {
         $stmt = $pdo->query("SELECT * FROM `$table`");
         $filePath = "$backupDir/{$table}.csv";
@@ -31,8 +32,9 @@ try {
         fclose($fp);
     }
 
-    // ZIP 파일 고정 이름 (덮어쓰기)
-    $zipFile = $backupDir . "/db_backup_latest.zip";
+    // ZIP 파일 이름에 생성 시간 포함
+    $now = date('Ymd_Hi'); // YYYYMMDD_HHmm
+    $zipFile = $backupDir . "/db_backup_{$now}.zip";
 
     $zip = new ZipArchive();
     if ($zip->open($zipFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
@@ -47,7 +49,14 @@ try {
         @unlink("$backupDir/{$table}.csv");
     }
 
-    echo "✅ DB 백업 완료 (덮어쓰기): " . basename($zipFile);
+    // 이전 백업 파일 삭제 (현재 제외)
+    foreach (glob("$backupDir/db_backup_*.zip") as $file) {
+        if ($file !== $zipFile) {
+            @unlink($file);
+        }
+    }
+
+    echo "✅ DB 백업 완료: " . basename($zipFile);
 
 } catch (Exception $e) {
     exit("❌ DB 백업 실패: " . $e->getMessage());
