@@ -1,10 +1,7 @@
 <?php
 session_start();
 
-$host = 'localhost';
-$dbname = 'cvfood';
-$user = 'cvfood';
-$pass = 'Nums135790!!';
+include 'db_config.php';
 
 // 세션 없고 자동로그인 쿠키 있으면 복구 시도
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['auto_login'])) {
