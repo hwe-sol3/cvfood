@@ -90,7 +90,7 @@ list($next_year, $next_m) = explode('-', $next_month);
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>재무팀용 주문 통계</title>
+<title>당월 주문 통계</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body {
