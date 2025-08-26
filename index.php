@@ -29,7 +29,7 @@ if (isset($_GET['code']) && $_GET['code'] === 'cvfood2025') {
     } else if ($user_level == 6 || $user_level == 5) {
         $user_level_kor = '직원';
     } else if ($user_level == 3) {
-        $user_level_kor = '재무';
+        $user_level_kor = '인사기획팀';
     } else if ($user_level == 1) {
         $user_level_kor = '업체';
     }

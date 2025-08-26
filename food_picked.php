@@ -76,13 +76,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // 오늘 주문한 사람들과 수령 상태 조회 (단일 테이블에서)
 $sql = "
-    SELECT user_id, lunch, lunch_salad, dinner_salad,
-           lunch_picked, lunch_salad_picked, dinner_salad_picked,
-           lunch_picked_at, lunch_salad_picked_at, dinner_salad_picked_at
-    FROM order_data 
-    WHERE date = ? AND (lunch = 1 OR lunch_salad = 1 OR dinner_salad = 1)
-    ORDER BY user_id
-";
+        SELECT o.user_id, l.user_name,
+            o.lunch, o.lunch_salad, o.dinner_salad,
+            o.lunch_picked, o.lunch_salad_picked, o.dinner_salad_picked,
+            o.lunch_picked_at, o.lunch_salad_picked_at, o.dinner_salad_picked_at
+        FROM order_data o
+        JOIN login_data l ON o.user_id = l.user_id
+        WHERE o.date = ?
+        AND (o.lunch = 1 OR o.lunch_salad = 1 OR o.dinner_salad = 1)
+        ORDER BY o.user_id
+        ";
 
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("s", $today);
@@ -430,7 +433,7 @@ if (!$user_order) {
             <table class="status-table">
                 <thead>
                     <tr>
-                        <th>직원ID</th>
+                        <th>이름</th>
                         <th>점심 백반</th>
                         <th>점심 샐러드</th>
                         <th>저녁 샐러드</th>
@@ -439,8 +442,8 @@ if (!$user_order) {
                 <tbody>
                     <?php foreach($orders as $order): ?>
                     <tr>
-                        <td class="user-col"><?php echo htmlspecialchars($order['user_id']); ?></td>
-                        
+                        <!-- 이름 -->
+                        <td class="user-col" style="text-align:center;"><?php echo htmlspecialchars($order['user_name']); ?></td>
                         <!-- 점심 백반 -->
                         <td>
                             <div class="status-cell">
