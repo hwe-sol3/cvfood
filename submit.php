@@ -1,4 +1,5 @@
 <?php
+include 'auth.php';
 // DB 연결 설정
 include 'db_config.php';
 $conn = new mysqli($host, $user, $pass, $dbname);

@@ -18,8 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($row && $user_pw === $row['user_pw']) {
+            session_regenerate_id(true); // 세션 고정 방지
             $_SESSION['user_id'] = $row['user_id'];
             $_SESSION['user_level'] = $row['user_level'];
+            $_SESSION['last_activity'] = time(); // 로그인 시 마지막 활동시간 기록
 
             // 아이디 기억하기
             if ($remember_id) {
@@ -203,6 +205,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <h2>로그인</h2>
     <?php if (!empty($error)): ?>
       <div class="error"><?php echo htmlspecialchars($error); ?></div>
+    <?php endif; ?>
+    <?php if (isset($_GET['error']) && $_GET['error'] === 'timeout'): ?>
+      <div class="error">30분 동안 활동이 없어 자동 로그아웃 되었습니다.</div>
     <?php endif; ?>
 
     <div class="form-group">
