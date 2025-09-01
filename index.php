@@ -1,5 +1,4 @@
 <?php
-include 'auth.php';
 include 'db_config.php';
 
 // 비밀코드로 접근하는 경우 (업체 관리자용)
@@ -12,6 +11,8 @@ if (isset($_GET['code']) && $_GET['code'] === 'cvfood2025') {
     $user_level_kor = '업체 관리자';
 } else {
     // 일반 로그인 체크
+    include 'auth.php';
+
     if (!isset($_SESSION['user_id'])) {
         header("Location: login.php");
         exit;
