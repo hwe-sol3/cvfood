@@ -27,20 +27,20 @@ $params = [];
 $types = '';
 
 if ($search_user) {
-    $where[] = "(user_id LIKE ? OR user_id IN (SELECT user_id FROM login_data WHERE user_name LIKE ?))";
+    $where[] = "(o.user_id LIKE ? OR o.user_id IN (SELECT user_id FROM login_data WHERE user_name LIKE ?))";
     $params[] = "%$search_user%";
     $params[] = "%$search_user%";
     $types .= 'ss';
 }
 
 if ($search_date) {
-    $where[] = "date = ?";
+    $where[] = "o.date = ?";
     $params[] = $search_date;
     $types .= 's';
 } elseif ($search_month) {
     $month_start = $search_month . '-01';
     $month_end = date('Y-m-t', strtotime($month_start));
-    $where[] = "date >= ? AND date <= ?";
+    $where[] = "o.date >= ? AND o.date <= ?";
     $params[] = $month_start;
     $params[] = $month_end;
     $types .= 'ss';
@@ -49,7 +49,7 @@ if ($search_date) {
 $where_clause = $where ? "WHERE " . implode(" AND ", $where) : "";
 
 // 전체 개수
-$count_sql = "SELECT COUNT(*) as total FROM order_data $where_clause";
+$count_sql = "SELECT COUNT(*) as total FROM order_data o $where_clause";
 $count_stmt = $conn->prepare($count_sql);
 if ($params) $count_stmt->bind_param($types, ...$params);
 $count_stmt->execute();
@@ -124,6 +124,8 @@ body{
 .btn-success:hover{background:#059669;}
 .btn-danger{background:var(--danger);}
 .btn-danger:hover{background:#dc2626;}
+.btn-secondary{background:var(--muted);}
+.btn-secondary:hover{background:#4b5563;}
 
 /* 테이블 */
 .table-section{
