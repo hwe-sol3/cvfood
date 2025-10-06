@@ -194,7 +194,7 @@ body{
 
 .back-btn{
   position:fixed; bottom:30px; right:30px; 
-  background:var(--primary); color:white; border:none; 
+  background:var(--success); color:white; border:none; 
   width:60px; height:60px; border-radius:50%; font-size:1.5rem;
   cursor:pointer; box-shadow:0 4px 16px rgba(16,185,129,0.3); 
   transition:all 0.3s ease; z-index:100;
@@ -229,8 +229,11 @@ body{
         <label>권한 레벨</label>
         <select name="search_level" class="form-control">
           <option value="">전체</option>
+          <option value="3" <?php echo $search_level === '3' ? 'selected' : ''; ?>>인사팀(3)</option>
+          <option value="5" <?php echo $search_level === '5' ? 'selected' : ''; ?>>솔루션사업3팀(5)</option>
+          <option value="6" <?php echo $search_level === '6' ? 'selected' : ''; ?>>그룹장(6)</option>
           <option value="7" <?php echo $search_level === '7' ? 'selected' : ''; ?>>관리자(7)</option>
-          <option value="1" <?php echo $search_level === '1' ? 'selected' : ''; ?>>일반(1)</option>
+          <option value="9" <?php echo $search_level === '9' ? 'selected' : ''; ?>>팀장(9)</option>
         </select>
       </div>
       <div class="form-group">
@@ -272,8 +275,23 @@ body{
               <td class="user-id"><?php echo htmlspecialchars($row['user_id']); ?></td>
               <td><?php echo htmlspecialchars($row['user_name'] ?? '-'); ?></td>
               <td>
-                <span class="badge <?php echo $row['user_level'] == 7 ? 'badge-admin' : 'badge-user'; ?>">
-                  <?php echo $row['user_level'] == 7 ? '관리자' : '일반'; ?> (<?php echo $row['user_level']; ?>)
+                <span class="badge <?php 
+                  if ($row['user_level'] == 7) {
+                    echo 'badge-admin';
+                  } else {
+                    echo 'badge-user';
+                  }
+                ?>">
+                  <?php 
+                    switch($row['user_level']) {
+                      case 3: echo '인사팀'; break;
+                      case 5: echo '솔루션사업3팀'; break;
+                      case 6: echo '그룹장'; break;
+                      case 7: echo '관리자'; break;
+                      case 9: echo '팀장'; break;
+                      default: echo '일반'; break;
+                    }
+                  ?>
                 </span>
               </td>
               <td><?php echo $row['user_group'] ?? '-'; ?></td>
@@ -331,8 +349,11 @@ body{
         <div class="form-group">
           <label>권한 레벨 *</label>
           <select name="user_level" id="userLevel" class="form-control" required>
-            <option value="1">일반 (1)</option>
-            <option value="7">관리자 (7)</option>
+            <option value="3">인사팀 (Level 3)</option>
+            <option value="5">솔루션사업3팀 (Level 5)</option>
+            <option value="6">그룹장 (Level 6)</option>
+            <option value="7">관리자 (Level 7)</option>
+            <option value="9">팀장 (Level 9)</option>
           </select>
         </div>
         <div class="form-group">
@@ -348,7 +369,7 @@ body{
   </div>
 </div>
 
-<button class="back-btn" onclick="location.href='admin_dashboard.php'">👑</button>
+<button class="back-btn" onclick="location.href='admin_dashboard.php'">🏠</button>
 
 <script>
 let isEditMode = false;
