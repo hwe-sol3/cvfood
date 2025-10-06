@@ -216,13 +216,7 @@ if ($user_level_kor === '관리자') {
   <div class="menu-buttons">
     <?php if ($user_level == 7): ?>
       <button onclick="location.href='menu.php'">🍱 식단표</button>
-      <button onclick="location.href='order.php'">📝 식사 주문</button>
-      <button onclick="location.href='myOrder.php'">📋 주문 조회</button>
-	  <button onclick="location.href='food_picked.php'">🚩 수령 확인 </button>
-	  <button onclick="location.href='external_order.php'">🤝 외부인 주문</button>
-      <button onclick="location.href='report_summary.php'">🏢 업체 확인용</button>
-      <button onclick="location.href='report_finance.php'">📊 당월 주문 통계</button>
-	  <button onclick="location.href='holidays.php'">📅 휴일 관리</button>
+      <button onclick="location.href='admin_dashboard.php'">📊 관리자 메뉴</button>
     <?php elseif ($user_level == 9 || $user_level == 6 || $user_level == 5): ?>
       <button onclick="location.href='menu.php'">🍱 식단표</button>
       <button onclick="location.href='order.php'">📝 식사 주문</button>
