@@ -99,6 +99,6 @@ $result = $conn->query("SELECT * FROM holidays WHERE YEAR(holiday_date)='$year' 
   </div>
 <?php endwhile; ?>
 </div>
-<button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
+<button class="back-btn" onclick="location.href='admin_dashboard.php'" title="처음으로 돌아가기">👑</button>
 </body>
 </html>
