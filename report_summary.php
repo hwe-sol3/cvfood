@@ -796,7 +796,12 @@ $dinner_salad_status = getOrderStatus('dinner_salad');
         const activeTab = urlParams.get('tab') || 'today';
         showTab(activeTab);
     </script>
-<button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
+    <?php if ($_SESSION['user_level'] == 7): ?>
+        <button class="back-btn" onclick="location.href='admin_dashboard.php'" title="관리자 대시보드로 돌아가기">👑</button>
+    <?php else: ?>
+        <button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
+    <?php endif; ?>
+
 </body>
 </html>
 
