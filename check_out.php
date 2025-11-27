@@ -1,27 +1,22 @@
 <?php
 include 'auth.php';
-
 // 세션 체크
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_level'])) {
     header("Location: login.php");
     exit;
 }
-
 $user_id = $_SESSION['user_id'];
 $user_level = $_SESSION['user_level'];
-
 // 접근 제한: 레벨 5,6,7,9만 허용
 if (!in_array($user_level, [5,6,7,9])) {
     die("접근 권한이 없습니다.");
 }
-
 // DB 연결
 include 'db_config.php';
 $conn = new mysqli($host,$user,$pass,$dbname);
 if($conn->connect_error){
     die("DB 연결 실패: ".$conn->connect_error);
 }
-
 // 로그인 데이터에서 이름 가져오기
 $stmt = $conn->prepare("SELECT user_name FROM login_data WHERE user_id=?");
 $stmt->bind_param("s", $user_id);
@@ -29,29 +24,23 @@ $stmt->execute();
 $stmt->bind_result($user_name);
 $stmt->fetch();
 $stmt->close();
-
 if(!$user_name){
     die("사용자 정보를 가져올 수 없습니다.");
 }
-
 // 오늘 날짜
 $today = date('Y-m-d');
-
 // 체크박스 항목 DB에서 조회
 $items = [];
 $result = $conn->query("SELECT check_list FROM check_out_list ORDER BY check_list ASC");
 while($row = $result->fetch_assoc()){
     $items[] = $row['check_list'];
 }
-
 // 퇴근 체크 처리
 if (isset($_POST['checkout'])) {
     date_default_timezone_set('Asia/Seoul');
-
     // 오늘 날짜와 현재 시간
     $today = date('Y-m-d');
     $current_time = date('H:i:s');
-
     // 1) 오늘 날짜 + user_id 로 기존 기록 있는지 확인
     $stmt = $conn->prepare("
         SELECT * FROM check_out
@@ -63,7 +52,6 @@ if (isset($_POST['checkout'])) {
     $stmt->store_result();
     $record_exists = $stmt->num_rows > 0;
     $stmt->close();
-
     // 2) 있으면 → UPDATE (시간만 갱신)
     if ($record_exists) {
         $stmt = $conn->prepare("
@@ -75,7 +63,6 @@ if (isset($_POST['checkout'])) {
         $stmt->execute();
         $stmt->close();
     } 
-
     // 3) 없으면 → INSERT
     else {
         $stmt = $conn->prepare("
@@ -86,19 +73,22 @@ if (isset($_POST['checkout'])) {
         $stmt->execute();
         $stmt->close();
     }
-
     $success = "퇴실 체크 완료!";
 }
-
-// 날짜 선택
+// 날짜 선택 (미래 날짜 차단)
 $selected_date = isset($_GET['date']) ? $_GET['date'] : $today;
-
+// 미래 날짜인 경우 오늘로 리다이렉트
+if (strtotime($selected_date) > strtotime($today)) {
+    header("Location: ?date=" . $today);
+    exit;
+}
 // 전체 퇴실 기록 조회 (선택한 날짜 기준)
 $list = $conn->query("SELECT * FROM check_out WHERE date='$selected_date' ORDER BY time DESC")->fetch_all(MYSQLI_ASSOC);
-
 // 이전/다음 날짜 계산
 $prev_date = date('Y-m-d', strtotime($selected_date . ' -1 day'));
 $next_date = date('Y-m-d', strtotime($selected_date . ' +1 day'));
+// 다음 날짜가 미래인지 확인
+$is_today = ($selected_date === $today);
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -119,70 +109,246 @@ $next_date = date('Y-m-d', strtotime($selected_date . ' +1 day'));
     --danger:#ef4444;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:20px;gap:20px;}
-h1{font-size:2rem;color:var(--primary);text-align:center;margin-bottom:10px;}
-.date-info{font-size:1.1rem;color:#6b7280;text-align:center;margin-bottom:10px;}
-.container{width:100%;max-width:800px;display:grid;gap:24px;}
-.card{background:var(--card-bg);padding:24px;border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid var(--primary);}
-.card h2{font-size:1.3rem;color:var(--primary);margin-bottom:16px;display:flex;align-items:center;gap:8px;}
-.checkbox-group{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;}
-.checkbox-group label{display:flex;align-items:center;gap:6px;font-size:0.95rem;}
-.btn{padding:12px 24px;font-size:1rem;border-radius:var(--radius);border:none;cursor:pointer;transition:all 0.3s ease;background:var(--primary);color:white;}
-.btn:disabled{background:gray;cursor:not-allowed;}
+body{
+    font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    min-height:100vh;
+    padding:15px;
+    gap:15px;
+    padding-bottom:100px;
+}
+h1{
+    font-size:clamp(1.5rem, 5vw, 2rem);
+    color:var(--primary);
+    text-align:center;
+    margin-bottom:5px;
+}
+.date-info{
+    font-size:clamp(0.95rem, 3vw, 1.1rem);
+    color:#6b7280;
+    text-align:center;
+    margin-bottom:10px;
+}
+.container{
+    width:100%;
+    max-width:800px;
+    display:grid;
+    gap:20px;
+}
+.card{
+    background:var(--card-bg);
+    padding:20px;
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    border-left:4px solid var(--primary);
+}
+.card h2{
+    font-size:clamp(1.1rem, 4vw, 1.3rem);
+    color:var(--primary);
+    margin-bottom:16px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+.checkbox-group{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:10px;
+    margin-bottom:16px;
+}
+.checkbox-group label{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:clamp(0.85rem, 2.5vw, 0.95rem);
+    word-break:keep-all;
+}
+.checkbox-group input[type="checkbox"]{
+    flex-shrink:0;
+    width:18px;
+    height:18px;
+}
+.btn{
+    width:100%;
+    padding:14px 24px;
+    font-size:clamp(0.95rem, 3vw, 1rem);
+    border-radius:var(--radius);
+    border:none;
+    cursor:pointer;
+    transition:all 0.3s ease;
+    background:var(--primary);
+    color:white;
+    font-weight:600;
+}
+.btn:disabled{
+    background:#9ca3af;
+    cursor:not-allowed;
+}
+.btn:not(:disabled):hover{
+    background:var(--secondary);
+    transform:translateY(-2px);
+    box-shadow:0 6px 16px rgba(37,99,235,0.3);
+}
 
-/* 테이블 고정 너비 */
-.table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
+/* 데스크톱: 테이블 표시 */
+.table-wrapper{
+    overflow-x:auto;
     margin-top:16px;
+}
+.table {
+    width:100%;
+    border-collapse:collapse;
+    min-width:400px;
 }
 .table th, .table td {
     padding:12px 8px;
     border-bottom:1px solid #e5e7eb;
     text-align:center;
-    overflow-wrap: break-word;
 }
 .table th {
     background:#f8fafc;
     font-weight:600;
+    font-size:0.95rem;
 }
-/* 이름/시간 열 너비 고정 */
-.table th:nth-child(1), .table td:nth-child(1) { width: 200px; } /* 이름 */
-.table th:nth-child(2), .table td:nth-child(2) { width: 150px; } /* 시간 */
+.table td{
+    font-size:0.9rem;
+}
 
-/* 화살표 버튼 스타일 */
+/* 모바일: 카드형 레이아웃 */
+.record-list{
+    display:none;
+}
+.record-item{
+    background:#f8fafc;
+    padding:16px;
+    border-radius:8px;
+    margin-bottom:12px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    border-left:3px solid var(--primary);
+}
+.record-item .name{
+    font-weight:600;
+    font-size:1rem;
+    flex:1;
+}
+.record-item .time{
+    color:#6b7280;
+    font-size:0.95rem;
+    white-space:nowrap;
+}
+
+/* 날짜 네비게이션 */
 #date-navigation {
     display:flex;
     justify-content:center;
     align-items:center;
-    gap:15px;
+    gap:12px;
     margin-bottom:12px;
+    flex-wrap:wrap;
+}
+#date-navigation a{
+    text-decoration:none;
 }
 #date-navigation button {
-    background: var(--card-bg);
-    border: 2px solid transparent;
-    padding: 8px 14px;
-    font-size: 1rem;
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    cursor: pointer;
-    transition: all 0.3s ease;
+    background:var(--card-bg);
+    border:2px solid #e5e7eb;
+    padding:8px 16px;
+    font-size:clamp(0.9rem, 3vw, 1rem);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    cursor:pointer;
+    transition:all 0.3s ease;
+    min-width:44px;
 }
-#date-navigation button:hover {
-    border-color: var(--primary);
-    background: linear-gradient(135deg, var(--primary), var(--secondary));
-    color: #fff;
+#date-navigation button:hover:not(:disabled) {
+    border-color:var(--primary);
+    background:var(--primary);
+    color:#fff;
 }
-.selected-date{font-weight:normal;font-size:1rem;}
-.back-btn{position:fixed;bottom:30px;right:30px;background:var(--primary);color:white;border:none;width:60px;height:60px;border-radius:50%;font-size:1.5rem;cursor:pointer;box-shadow:0 4px 16px rgba(37,99,235,0.3);transition:all 0.3s ease;}
-.back-btn:hover{transform:scale(1.1);box-shadow:0 6px 20px rgba(37,99,235,0.4);}
+#date-navigation button:disabled {
+    opacity:0.4;
+    cursor:not-allowed;
+}
+.selected-date{
+    font-weight:600;
+    font-size:clamp(0.9rem, 3vw, 1rem);
+    color:var(--primary);
+    text-align:center;
+}
+
+.back-btn{
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    background:var(--primary);
+    color:white;
+    border:none;
+    width:56px;
+    height:56px;
+    border-radius:50%;
+    font-size:1.4rem;
+    cursor:pointer;
+    box-shadow:0 4px 16px rgba(37,99,235,0.3);
+    transition:all 0.3s ease;
+    z-index:1000;
+}
+.back-btn:hover{
+    transform:scale(1.1);
+    box-shadow:0 6px 20px rgba(37,99,235,0.4);
+}
+
+/* 모바일 최적화 */
+@media (max-width: 640px) {
+    body{
+        padding:12px;
+        gap:12px;
+    }
+    .card{
+        padding:16px;
+    }
+    .checkbox-group{
+        grid-template-columns:repeat(auto-fit,minmax(100px,1fr));
+        gap:8px;
+    }
+    .table-wrapper{
+        display:none;
+    }
+    .record-list{
+        display:block;
+    }
+    #date-navigation{
+        gap:8px;
+    }
+    #date-navigation button{
+        padding:6px 12px;
+    }
+    .back-btn{
+        width:50px;
+        height:50px;
+        bottom:15px;
+        right:15px;
+        font-size:1.2rem;
+    }
+}
+
+/* 태블릿 최적화 */
+@media (min-width: 641px) and (max-width: 1024px) {
+    .checkbox-group{
+        grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    }
+}
 </style>
 </head>
 <body>
 <h1>🕖 최종 퇴실자</h1>
 <div class="date-info">📅 <?= date('Y년 m월 d일 (') . ['일','월','화','수','목','금','토'][date('w', strtotime($selected_date))] . ')' ?></div>
-
 <div class="container">
     <div class="card">
         <h2>최종 퇴실 체크</h2>
@@ -194,44 +360,57 @@ h1{font-size:2rem;color:var(--primary);text-align:center;margin-bottom:10px;}
             </div>
             <button class="btn" type="submit" name="checkout" id="checkoutBtn" disabled>최종 퇴실 체크</button>
         </form>
-        <?php if (isset($success)) echo "<p style='color:var(--success);margin-top:10px;'>$success</p>"; ?>
+        <?php if (isset($success)) echo "<p style='color:var(--success);margin-top:10px;font-weight:600;'>$success</p>"; ?>
     </div>
-
     <div class="card">
         <h2>최종 퇴실 기록</h2>
         <div id="date-navigation">
             <a href="?date=<?= $prev_date ?>"><button>&lt;</button></a>
             <span class="selected-date"><?= date('Y-m-d', strtotime($selected_date)) ?> (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($selected_date))] ?>)</span>
-            <a href="?date=<?= $next_date ?>"><button>&gt;</button></a>
+            <?php if ($is_today): ?>
+                <button disabled>&gt;</button>
+            <?php else: ?>
+                <a href="?date=<?= $next_date ?>"><button>&gt;</button></a>
+            <?php endif; ?>
         </div>
-        <table class="table">
-            <tr>
-                <th>이름</th>
-                <th>시간</th>
-            </tr>
+        
+        <!-- 데스크톱: 테이블 -->
+        <div class="table-wrapper">
+            <table class="table">
+                <tr>
+                    <th>이름</th>
+                    <th>시간</th>
+                </tr>
+                <?php foreach ($list as $row): ?>
+                <tr>
+                    <td><?= htmlspecialchars($row['user_name']) ?></td>
+                    <td><?= htmlspecialchars($row['time']) ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </table>
+        </div>
+        
+        <!-- 모바일: 카드형 -->
+        <div class="record-list">
             <?php foreach ($list as $row): ?>
-            <tr>
-                <td><?= htmlspecialchars($row['user_name']) ?></td>
-                <td><?= htmlspecialchars($row['time']) ?></td>
-            </tr>
+            <div class="record-item">
+                <div class="name"><?= htmlspecialchars($row['user_name']) ?></div>
+                <div class="time"><?= htmlspecialchars($row['time']) ?></div>
+            </div>
             <?php endforeach; ?>
-        </table>
+        </div>
     </div>
 </div>
-
 <button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
-
 <script>
 const checkboxes = document.querySelectorAll('.check-item');
 const checkoutBtn = document.getElementById('checkoutBtn');
-
 checkboxes.forEach(cb => {
     cb.addEventListener('change', () => {
         const allChecked = Array.from(checkboxes).every(c => c.checked);
         checkoutBtn.disabled = !allChecked;
     });
 });
-
 document.getElementById('checkoutForm').addEventListener('submit', function(e){
     if(!confirm('최종 퇴실 체크를 하시겠습니까?')) {
         e.preventDefault();
