@@ -241,6 +241,14 @@ body{
         <div class="menu-desc">이번 달 주문 통계를 조회합니다</div>
       </a>
     </div>
+
+    <div class="menu-card purple">
+      <a href="check_out_list.php">
+        <span class="menu-icon">🕖</span>
+        <div class="menu-title">최종 퇴실 체크</div>
+        <div class="menu-desc">최종 퇴실 시 체크 항목을 관리합니다</div>
+      </a>
+    </div>
   </div>
 </div>
 
