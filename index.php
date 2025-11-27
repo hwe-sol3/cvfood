@@ -222,6 +222,7 @@ if ($user_level_kor === '관리자') {
       <button onclick="location.href='order.php'">📝 식사 주문</button>
       <button onclick="location.href='myOrder.php'">📋 주문 조회</button>
 	  <button onclick="location.href='food_picked.php'">🚩 수령 확인 </button>
+    <button onclick="location.href='check_out.php'">🕖 최종 퇴실자 </button>
 		<?php if ($user_level == 9 || $user_level == 6): ?>
 			<button onclick="location.href='external_order.php'">🤝 외부인 주문</button>
 		<?php endif; ?>
