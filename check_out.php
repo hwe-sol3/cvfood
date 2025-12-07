@@ -348,7 +348,9 @@ h1{
 </head>
 <body>
 <h1>🕖 최종 퇴실자</h1>
-<div class="date-info">📅 <?= date('Y년 m월 d일 (') . ['일','월','화','수','목','금','토'][date('w', strtotime($selected_date))] . ')' ?></div>
+<div class="date-info" id="top-date-fixed">
+    📅 <?= date('Y년 m월 d일 (') . ['일','월','화','수','목','금','토'][date('w')] . ')' ?>
+</div>
 <div class="container">
     <div class="card">
         <h2>최종 퇴실 체크</h2>
