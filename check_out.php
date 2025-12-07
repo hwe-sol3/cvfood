@@ -29,6 +29,36 @@ if(!$user_name){
 }
 // 오늘 날짜
 $today = date('Y-m-d');
+
+// ▼▼▼ 주간 조회용 날짜 처리 ▼▼▼
+$week_offset = isset($_GET['week']) ? intval($_GET['week']) : 0;
+
+// 기준 주는 “이번주 월요일”
+$base_monday = date('Y-m-d', strtotime("monday this week"));
+
+// week_offset 만큼 이동
+$target_monday = date('Y-m-d', strtotime("$base_monday $week_offset week"));
+$target_sunday = date('Y-m-d', strtotime("$target_monday +6 days"));
+
+// 이번주인지 여부 (오른쪽 화살표 비활성화 조건)
+$is_current_week = ($week_offset == 0);
+
+// 주간 마지막 퇴실자 조회
+$weekly_data = $conn->query("
+    SELECT date, user_name, time
+    FROM check_out
+    WHERE date BETWEEN '$target_monday' AND '$target_sunday'
+    ORDER BY date ASC, time DESC
+")->fetch_all(MYSQLI_ASSOC);
+
+// 날짜별 마지막 퇴실자만 저장
+$final_weekly = [];
+foreach ($weekly_data as $row) {
+    if (!isset($final_weekly[$row['date']])) {
+        $final_weekly[$row['date']] = $row;
+    }
+}
+
 // 체크박스 항목 DB에서 조회
 $items = [];
 $result = $conn->query("SELECT check_list FROM check_out_list ORDER BY check_list ASC");
@@ -75,6 +105,61 @@ if (isset($_POST['checkout'])) {
     }
     $success = "퇴실 체크 완료!";
 }
+
+if (isset($_POST['download_month_csv'])) {
+    $month = $_POST['csv_month']; // 예: 2025-01
+    if (!$month) {
+        die("월을 선택하세요.");
+    }
+
+    // 해당 월의 첫날, 마지막날 계산
+    $first_day = date('Y-m-01', strtotime($month));
+    $last_day = date('Y-m-t', strtotime($month));
+
+    // 날짜 배열 만들기
+    $period = new DatePeriod(
+        new DateTime($first_day),
+        new DateInterval('P1D'),
+        (new DateTime($last_day))->modify('+1 day')
+    );
+
+    // CSV 데이터 준비
+    $csv_data = "날짜,이름,시간\n";
+
+    foreach ($period as $date) {
+        $d = $date->format('Y-m-d');
+
+        // 해당 날짜의 최종 퇴실자 1명 조회
+        $stmt = $conn->prepare("
+            SELECT user_name, time 
+            FROM check_out
+            WHERE date = ?
+            ORDER BY time DESC
+            LIMIT 1
+        ");
+        $stmt->bind_param("s", $d);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+
+        if ($row) {
+            $csv_data .= "$d,{$row['user_name']},{$row['time']}\n";
+        } else {
+            $csv_data .= "$d,,\n"; // 데이터 없는 날짜는 빈 칸
+        }
+    }
+
+    // CSV 다운로드 처리
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="final_checkout_'.$month.'.csv"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    echo "\xEF\xBB\xBF"; // UTF-8 BOM (엑셀용)
+    echo $csv_data;
+    exit;
+}
+
 // 날짜 선택 (미래 날짜 차단)
 $selected_date = isset($_GET['date']) ? $_GET['date'] : $today;
 // 미래 날짜인 경우 오늘로 리다이렉트
@@ -231,7 +316,7 @@ h1{
     justify-content:space-between;
     align-items:center;
     gap:12px;
-    border-left:3px solid var(--primary);
+    border-left:none;
 }
 .record-item .name{
     font-weight:600;
@@ -344,6 +429,34 @@ h1{
         grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
     }
 }
+
+/* 최종 퇴실자 조회(Weekly Final) 모바일 스타일 전용 */
+@media (max-width: 600px) {
+    .weekly-final .record-item .name {
+        display: flex;
+        align-items: center;
+        gap: 60px; /* 날짜-이름 사이 간격 */
+        font-size: 14px;
+    }
+
+    .weekly-final .record-item .time {
+        margin-top: 2px;
+        font-size: 13px;
+    }
+}
+/* 월 선택 input 크기 확대 */
+input[type="month"] {
+    padding: 10px 14px;
+    font-size: 1rem;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+}
+.section-wrapper {
+    width: 100%;
+    max-width: 800px;
+    margin: 20px auto;
+    margin-top: 10px !important;
+}
 </style>
 </head>
 <body>
@@ -375,7 +488,7 @@ h1{
                 <a href="?date=<?= $next_date ?>"><button>&gt;</button></a>
             <?php endif; ?>
         </div>
-        
+
         <!-- 데스크톱: 테이블 -->
         <div class="table-wrapper">
             <table class="table">
@@ -402,7 +515,108 @@ h1{
             <?php endforeach; ?>
         </div>
     </div>
+<!-- ⭐ 주간 조회 (팀장님 전용) -->
+<?php if ($user_level == 9): ?>
+<div class="card">
+    <h2>주간 최종 퇴실자 조회</h2>
+
+    <!-- 주간 이동 네비 -->
+    <div id="date-navigation" style="margin-bottom: 18px;">
+        <a href="?week=<?= $week_offset - 1 ?>">
+            <button>&lt;</button>
+        </a>
+
+        <span class="selected-date">
+            <?= date('Y-m-d', strtotime($target_monday)) ?>
+            (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_monday))] ?>)
+            ~
+            <?= date('Y-m-d', strtotime($target_sunday)) ?>
+            (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_sunday))] ?>)
+        </span>
+
+        <?php if ($is_current_week): ?>
+            <button disabled>&gt;</button>
+        <?php else: ?>
+            <a href="?week=<?= $week_offset + 1 ?>">
+                <button>&gt;</button>
+            </a>
+        <?php endif; ?>
+    </div>
+
+    <!-- 주간 테이블 -->
+    <div class="table-wrapper">
+        <table class="table">
+            <tr>
+                <th>날짜</th>
+                <th>최종 퇴실자</th>
+                <th>시간</th>
+            </tr>
+
+            <?php
+            // 월요일부터 일요일까지 순서대로 출력
+            for ($i = 0; $i < 7; $i++):
+                $day = date('Y-m-d', strtotime("$target_monday +$i days"));
+                $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+
+                if (isset($final_weekly[$day])) {
+                    $row = $final_weekly[$day];
+                    $uname = htmlspecialchars($row['user_name']);
+                    $utime = htmlspecialchars($row['time']);
+                } else {
+                    $uname = "";
+                    $utime = "";
+                }
+            ?>
+            <tr>
+                <td><?= $day ?> (<?= $w ?>)</td>
+                <td><?= $uname ?></td>
+                <td><?= $utime ?></td>
+            </tr>
+            <?php endfor; ?>
+        </table>
+    </div>
+
+<!-- 모바일 카드 형태 -->
+<div class="weekly-final">
+<div class="record-list">
+    <?php for ($i = 0; $i < 7; $i++):
+        $day = date('Y-m-d', strtotime("$target_monday +$i days"));
+        $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+
+        if (isset($final_weekly[$day])) {
+            $row = $final_weekly[$day];
+            $uname = htmlspecialchars($row['user_name']);
+            $utime = htmlspecialchars($row['time']);
+        } else {
+            $uname = "";
+            $utime = "";
+        }
+    ?>
+    <div class="record-item">
+        <div class="name">
+            <span class="date-text"><?= $day ?> (<?= $w ?>)</span>
+            <?php if ($uname): ?>
+                <span class="user-text"><?= $uname ?></span>
+            <?php endif; ?>
+        </div>
+        <div class="time"><?= $utime ?></div>
+      </div>
+      <?php endfor; ?>
+    </div>
 </div>
+<?php endif; ?>
+</div>
+<div class="section-wrapper">
+    <div class="card">
+        <h2>월간 최종 퇴실자 CSV 다운로드</h2>
+        <form method="post">
+            <input type="month" name="csv_month" required>
+            <br><br>
+            <button class="btn" type="submit" name="download_month_csv">CSV 다운로드</button>
+        </form>
+    </div>
+</div>
+
 <button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
 <script>
 const checkboxes = document.querySelectorAll('.check-item');
@@ -418,6 +632,14 @@ document.getElementById('checkoutForm').addEventListener('submit', function(e){
         e.preventDefault();
     }
 });
+// ▼▼ 현재 월을 input[type="month"] 기본값으로 지정 ▼▼
+const monthInput = document.querySelector('input[name="csv_month"]');
+if (monthInput) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    monthInput.value = `${yyyy}-${mm}`;
+}
 </script>
 </body>
 </html>
