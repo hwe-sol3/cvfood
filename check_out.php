@@ -450,6 +450,7 @@ input[type="month"] {
     font-size: 1rem;
     border: 2px solid #d1d5db;
     border-radius: 8px;
+    background-color: #fff;
 }
 .section-wrapper {
     width: 100%;
@@ -488,7 +489,10 @@ input[type="month"] {
                 <a href="?date=<?= $next_date ?>"><button>&gt;</button></a>
             <?php endif; ?>
         </div>
-
+        </html>
+        <?php if(count($list) === 0): ?>
+             <p style="text-align:center; color:#6b7280; font-weight:600; margin-top:10px;">퇴실 기록이 없습니다.</p>
+        <?php else: ?>
         <!-- 데스크톱: 테이블 -->
         <div class="table-wrapper">
             <table class="table">
@@ -514,6 +518,7 @@ input[type="month"] {
             </div>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
     </div>
 <!-- ⭐ 주간 조회 (팀장님 전용) -->
 <?php if ($user_level == 9): ?>
