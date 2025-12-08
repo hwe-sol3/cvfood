@@ -30,10 +30,16 @@ if(!$user_name){
 // 오늘 날짜
 $today = date('Y-m-d');
 
-// ▼▼▼ 주간 조회용 날짜 처리 ▼▼▼
+// ▼▼▼ 날짜/주간 파라미터 처리 ▼▼▼
 $week_offset = isset($_GET['week']) ? intval($_GET['week']) : 0;
+$selected_date = isset($_GET['date']) ? $_GET['date'] : $today;
 
-// 기준 주는 “이번주 월요일”
+// 미래 날짜인 경우 오늘로 리다이렉트
+if (strtotime($selected_date) > strtotime($today)) {
+    $selected_date = $today;
+}
+
+// 기준 주는 "이번주 월요일"
 $base_monday = date('Y-m-d', strtotime("monday this week"));
 
 // week_offset 만큼 이동
@@ -160,13 +166,6 @@ if (isset($_POST['download_month_csv'])) {
     exit;
 }
 
-// 날짜 선택 (미래 날짜 차단)
-$selected_date = isset($_GET['date']) ? $_GET['date'] : $today;
-// 미래 날짜인 경우 오늘로 리다이렉트
-if (strtotime($selected_date) > strtotime($today)) {
-    header("Location: ?date=" . $today);
-    exit;
-}
 // 전체 퇴실 기록 조회 (선택한 날짜 기준)
 $list = $conn->query("SELECT * FROM check_out WHERE date='$selected_date' ORDER BY time DESC")->fetch_all(MYSQLI_ASSOC);
 // 이전/다음 날짜 계산
@@ -421,6 +420,49 @@ h1{
         right:15px;
         font-size:1.2rem;
     }
+    
+    /* 최종 퇴실 기록 모바일 헤더 */
+    .daily-header {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        background: #e0e7ff;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--primary);
+    }
+    
+    .daily-header > div {
+        text-align: center;
+    }
+    
+    /* 최종 퇴실 기록 모바일 아이템 */
+    .daily-record .record-item {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        align-items: center;
+    }
+    
+    .daily-record .record-item .name {
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+    }
+    
+    .daily-record .record-item .time {
+        text-align: center;
+        color: #374151;
+        font-size: 13px;
+        font-weight: 700;
+    }
 }
 
 /* 태블릿 최적화 */
@@ -431,19 +473,67 @@ h1{
 }
 
 /* 최종 퇴실자 조회(Weekly Final) 모바일 스타일 전용 */
-@media (max-width: 600px) {
-    .weekly-final .record-item .name {
-        display: flex;
+@media (max-width: 640px) {
+    .weekly-final .record-item {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
         align-items: center;
-        gap: 60px; /* 날짜-이름 사이 간격 */
-        font-size: 14px;
+    }
+    
+    .weekly-final .record-item .date-col {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+    
+    .weekly-final .record-item .day-text {
+        font-size: 11px;
+        color: #6b7280;
+        font-weight: 400;
+    }
+    
+    .weekly-final .record-item .name-col {
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
     }
 
-    .weekly-final .record-item .time {
-        margin-top: 2px;
+    .weekly-final .record-item .time-col {
+        text-align: center;
+        color: #374151;
         font-size: 13px;
+        font-weight: 700;
+    }
+    
+    /* 모바일 주간 조회 헤더 */
+    .weekly-header {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        background: #e0e7ff;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--primary);
+    }
+    
+    .weekly-header > div {
+        text-align: center;
     }
 }
+
 /* 월 선택 input 크기 확대 */
 input[type="month"] {
     padding: 10px 14px;
@@ -452,11 +542,11 @@ input[type="month"] {
     border-radius: 8px;
     background-color: #fff;
 }
-.section-wrapper {
-    width: 100%;
-    max-width: 800px;
-    margin: 20px auto;
-    margin-top: 10px !important;
+
+/* 날짜/시간 숫자만 monospace */
+.date-mono,
+.time-mono {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 </style>
 </head>
@@ -478,18 +568,18 @@ input[type="month"] {
         </form>
         <?php if (isset($success)) echo "<p style='color:var(--success);margin-top:10px;font-weight:600;'>$success</p>"; ?>
     </div>
+    
     <div class="card">
         <h2>최종 퇴실 기록</h2>
         <div id="date-navigation">
-            <a href="?date=<?= $prev_date ?>"><button>&lt;</button></a>
+            <a href="?date=<?= $prev_date ?>&week=<?= $week_offset ?>"><button>&lt;</button></a>
             <span class="selected-date"><?= date('Y-m-d', strtotime($selected_date)) ?> (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($selected_date))] ?>)</span>
             <?php if ($is_today): ?>
                 <button disabled>&gt;</button>
             <?php else: ?>
-                <a href="?date=<?= $next_date ?>"><button>&gt;</button></a>
+                <a href="?date=<?= $next_date ?>&week=<?= $week_offset ?>"><button>&gt;</button></a>
             <?php endif; ?>
         </div>
-        </html>
         <?php if(count($list) === 0): ?>
              <p style="text-align:center; color:#6b7280; font-weight:600; margin-top:10px;">퇴실 기록이 없습니다.</p>
         <?php else: ?>
@@ -503,115 +593,131 @@ input[type="month"] {
                 <?php foreach ($list as $row): ?>
                 <tr>
                     <td><?= htmlspecialchars($row['user_name']) ?></td>
-                    <td><?= htmlspecialchars($row['time']) ?></td>
+                    <td><span class="time-mono"><?= htmlspecialchars($row['time']) ?></span></td>
                 </tr>
                 <?php endforeach; ?>
             </table>
         </div>
         
         <!-- 모바일: 카드형 -->
-        <div class="record-list">
-            <?php foreach ($list as $row): ?>
-            <div class="record-item">
-                <div class="name"><?= htmlspecialchars($row['user_name']) ?></div>
-                <div class="time"><?= htmlspecialchars($row['time']) ?></div>
+        <div class="daily-record">
+            <div class="record-list">
+                <!-- 모바일 헤더 추가 -->
+                <div class="daily-header">
+                    <div>이름</div>
+                    <div>시간</div>
+                </div>
+                
+                <?php foreach ($list as $row): ?>
+                <div class="record-item">
+                    <div class="name"><?= htmlspecialchars($row['user_name']) ?></div>
+                    <div class="time"><span class="time-mono"><?= htmlspecialchars($row['time']) ?></span></div>
+                </div>
+                <?php endforeach; ?>
             </div>
-            <?php endforeach; ?>
         </div>
         <?php endif; ?>
     </div>
-<!-- ⭐ 주간 조회 (팀장님 전용) -->
-<?php if ($user_level == 9): ?>
-<div class="card">
-    <h2>주간 최종 퇴실자 조회</h2>
 
-    <!-- 주간 이동 네비 -->
-    <div id="date-navigation" style="margin-bottom: 18px;">
-        <a href="?week=<?= $week_offset - 1 ?>">
-            <button>&lt;</button>
-        </a>
+    <!-- ⭐ 주간 조회 (팀장님 전용) -->
+    <?php if ($user_level == 9): ?>
+    <div class="card">
+        <h2>주간 최종 퇴실자 조회</h2>
 
-        <span class="selected-date">
-            <?= date('Y-m-d', strtotime($target_monday)) ?>
-            (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_monday))] ?>)
-            ~
-            <?= date('Y-m-d', strtotime($target_sunday)) ?>
-            (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_sunday))] ?>)
-        </span>
-
-        <?php if ($is_current_week): ?>
-            <button disabled>&gt;</button>
-        <?php else: ?>
-            <a href="?week=<?= $week_offset + 1 ?>">
-                <button>&gt;</button>
+        <!-- 주간 이동 네비 -->
+        <div id="date-navigation" style="margin-bottom: 18px;">
+            <a href="?date=<?= $selected_date ?>&week=<?= $week_offset - 1 ?>">
+                <button>&lt;</button>
             </a>
-        <?php endif; ?>
-    </div>
 
-    <!-- 주간 테이블 -->
-    <div class="table-wrapper">
-        <table class="table">
-            <tr>
-                <th>날짜</th>
-                <th>최종 퇴실자</th>
-                <th>시간</th>
-            </tr>
+            <span class="selected-date">
+                <?= date('Y-m-d', strtotime($target_monday)) ?>
+                (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_monday))] ?>)
+                ~
+                <?= date('Y-m-d', strtotime($target_sunday)) ?>
+                (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_sunday))] ?>)
+            </span>
 
-            <?php
-            // 월요일부터 일요일까지 순서대로 출력
-            for ($i = 0; $i < 7; $i++):
-                $day = date('Y-m-d', strtotime("$target_monday +$i days"));
-                $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
-
-                if (isset($final_weekly[$day])) {
-                    $row = $final_weekly[$day];
-                    $uname = htmlspecialchars($row['user_name']);
-                    $utime = htmlspecialchars($row['time']);
-                } else {
-                    $uname = "";
-                    $utime = "";
-                }
-            ?>
-            <tr>
-                <td><?= $day ?> (<?= $w ?>)</td>
-                <td><?= $uname ?></td>
-                <td><?= $utime ?></td>
-            </tr>
-            <?php endfor; ?>
-        </table>
-    </div>
-
-<!-- 모바일 카드 형태 -->
-<div class="weekly-final">
-<div class="record-list">
-    <?php for ($i = 0; $i < 7; $i++):
-        $day = date('Y-m-d', strtotime("$target_monday +$i days"));
-        $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
-
-        if (isset($final_weekly[$day])) {
-            $row = $final_weekly[$day];
-            $uname = htmlspecialchars($row['user_name']);
-            $utime = htmlspecialchars($row['time']);
-        } else {
-            $uname = "";
-            $utime = "";
-        }
-    ?>
-    <div class="record-item">
-        <div class="name">
-            <span class="date-text"><?= $day ?> (<?= $w ?>)</span>
-            <?php if ($uname): ?>
-                <span class="user-text"><?= $uname ?></span>
+            <?php if ($is_current_week): ?>
+                <button disabled>&gt;</button>
+            <?php else: ?>
+                <a href="?date=<?= $selected_date ?>&week=<?= $week_offset + 1 ?>">
+                    <button>&gt;</button>
+                </a>
             <?php endif; ?>
         </div>
-        <div class="time"><?= $utime ?></div>
-      </div>
-      <?php endfor; ?>
+
+        <!-- 주간 테이블 -->
+        <div class="table-wrapper">
+            <table class="table">
+                <tr>
+                    <th>날짜</th>
+                    <th>최종 퇴실자</th>
+                    <th>시간</th>
+                </tr>
+
+                <?php
+                // 월요일부터 일요일까지 순서대로 출력
+                for ($i = 0; $i < 7; $i++):
+                    $day = date('Y-m-d', strtotime("$target_monday +$i days"));
+                    $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+
+                    if (isset($final_weekly[$day])) {
+                        $row = $final_weekly[$day];
+                        $uname = htmlspecialchars($row['user_name']);
+                        $utime = htmlspecialchars($row['time']);
+                    } else {
+                        $uname = "";
+                        $utime = "";
+                    }
+                ?>
+                <tr>
+                    <td><span class="date-mono"><?= $day ?></span> (<?= $w ?>)</td>
+                    <td><?= $uname ?></td>
+                    <td><span class="time-mono"><?= $utime ?></span></td>
+                </tr>
+                <?php endfor; ?>
+            </table>
+        </div>
+
+        <!-- 모바일 카드 형태 -->
+        <div class="weekly-final">
+            <div class="record-list">
+                <!-- 모바일 헤더 추가 -->
+                <div class="weekly-header">
+                    <div>날짜</div>
+                    <div>이름</div>
+                    <div>시간</div>
+                </div>
+                
+                <?php for ($i = 0; $i < 7; $i++):
+                    $day = date('Y-m-d', strtotime("$target_monday +$i days"));
+                    $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+
+                    if (isset($final_weekly[$day])) {
+                        $row = $final_weekly[$day];
+                        $uname = htmlspecialchars($row['user_name']);
+                        $utime = htmlspecialchars($row['time']);
+                    } else {
+                        $uname = "";
+                        $utime = "";
+                    }
+                ?>
+                <div class="record-item">
+                    <div class="date-col">
+                        <span class="date-mono"><?= $day ?></span>
+                        <span class="day-text">(<?= $w ?>)</span>
+                    </div>
+                    <div class="name-col"><?= $uname ?></div>
+                    <div class="time-col"><span class="time-mono"><?= $utime ?></span></div>
+                </div>
+                <?php endfor; ?>
+            </div>
+        </div>
     </div>
-</div>
-<?php endif; ?>
-</div>
-<div class="section-wrapper">
+    <?php endif; ?>
+
+    <!-- ⭐ 월간 CSV 다운로드 (항상 표시) -->
     <div class="card">
         <h2>월간 최종 퇴실자 CSV 다운로드</h2>
         <form method="post">
@@ -620,23 +726,52 @@ input[type="month"] {
             <button class="btn" type="submit" name="download_month_csv">CSV 다운로드</button>
         </form>
     </div>
-</div>
+
+</div> <!-- container 닫는 태그 -->
 
 <button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
+
 <script>
+// 체크박스 상태를 sessionStorage에 저장
 const checkboxes = document.querySelectorAll('.check-item');
 const checkoutBtn = document.getElementById('checkoutBtn');
-checkboxes.forEach(cb => {
+const formKey = 'checkout_checkboxes';
+
+// 페이지 로드 시 저장된 체크박스 상태 복원
+window.addEventListener('DOMContentLoaded', () => {
+    const saved = sessionStorage.getItem(formKey);
+    if (saved) {
+        const states = JSON.parse(saved);
+        checkboxes.forEach((cb, idx) => {
+            if (states[idx]) cb.checked = true;
+        });
+        updateButton();
+    }
+});
+
+// 체크박스 상태 변경 시 저장
+checkboxes.forEach((cb, idx) => {
     cb.addEventListener('change', () => {
-        const allChecked = Array.from(checkboxes).every(c => c.checked);
-        checkoutBtn.disabled = !allChecked;
+        const states = Array.from(checkboxes).map(c => c.checked);
+        sessionStorage.setItem(formKey, JSON.stringify(states));
+        updateButton();
     });
 });
+
+function updateButton() {
+    const allChecked = Array.from(checkboxes).every(c => c.checked);
+    checkoutBtn.disabled = !allChecked;
+}
+
+// 폼 제출 시 저장된 상태 삭제
 document.getElementById('checkoutForm').addEventListener('submit', function(e){
     if(!confirm('최종 퇴실 체크를 하시겠습니까?')) {
         e.preventDefault();
+    } else {
+        sessionStorage.removeItem(formKey);
     }
 });
+
 // ▼▼ 현재 월을 input[type="month"] 기본값으로 지정 ▼▼
 const monthInput = document.querySelector('input[name="csv_month"]');
 if (monthInput) {
