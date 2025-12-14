@@ -1,5 +1,20 @@
 <?php
 include 'auth.php';
+/**
+ * PC 기준 datetime 문자열을 받아
+ * 근무일자(Y-m-d)를 반환
+ * 기준 시각: 08:30
+ */
+function getWorkDateFromDatetime($datetime) {
+    $dt = new DateTime($datetime);
+    $cutoff = clone $dt;
+    $cutoff->setTime(8, 30, 0);
+
+    if ($dt < $cutoff) {
+        $dt->modify('-1 day');
+    }
+    return $dt->format('Y-m-d');
+}
 // 세션 체크
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_level'])) {
     header("Location: login.php");
@@ -27,14 +42,32 @@ $stmt->close();
 if(!$user_name){
     die("사용자 정보를 가져올 수 없습니다.");
 }
-// 오늘 날짜
-$today = date('Y-m-d');
 
-// ▼▼▼ 주간 조회용 날짜 처리 ▼▼▼
+// PC 기준 현재 datetime (쿠키)
+if (isset($_COOKIE['pc_datetime_now'])) {
+    $pc_now = $_COOKIE['pc_datetime_now'];
+} else {
+    // 예외 fallback (거의 안 탐)
+    $pc_now = date('Y-m-d H:i:s');
+}
+
+// 화면 기준 날짜 (08:30 기준)
+$today = getWorkDateFromDatetime($pc_now);
+
+// ▼▼▼ 날짜/주간 파라미터 처리 ▼▼▼
 $week_offset = isset($_GET['week']) ? intval($_GET['week']) : 0;
+$selected_date = isset($_GET['date']) ? $_GET['date'] : $today;
 
-// 기준 주는 “이번주 월요일”
-$base_monday = date('Y-m-d', strtotime("monday this week"));
+// 미래 날짜인 경우 오늘로 리다이렉트
+if (strtotime($selected_date) > strtotime($today)) {
+    $selected_date = $today;
+}
+
+// 기준 주는 "이번주 월요일"
+$base_monday = date(
+    'Y-m-d',
+    strtotime("monday this week", strtotime($today))
+);
 
 // week_offset 만큼 이동
 $target_monday = date('Y-m-d', strtotime("$base_monday $week_offset week"));
@@ -48,8 +81,12 @@ $weekly_data = $conn->query("
     SELECT date, user_name, time
     FROM check_out
     WHERE date BETWEEN '$target_monday' AND '$target_sunday'
-    ORDER BY date ASC,
-        (CASE WHEN time < '08:00:00' THEN ADDTIME(time, '24:00:00') ELSE time END) DESC
+    ORDER BY
+    CASE
+        WHEN time < '08:30:00'
+        THEN CONCAT(DATE_ADD(date, INTERVAL 1 DAY), ' ', time)
+        ELSE CONCAT(date, ' ', time)
+    END DESC
 ")->fetch_all(MYSQLI_ASSOC);
 
 // 날짜별 마지막 퇴실자만 저장
@@ -68,70 +105,52 @@ while($row = $result->fetch_assoc()){
 }
 // 퇴근 체크 처리
 if (isset($_POST['checkout'])) {
-    // timezone 설정 — 반드시 먼저
-    // PC/모바일에서 전달한 시간 받기
-    if (!empty($_POST['client_datetime'])) {
-        // 클라이언트 시간을 그대로 사용 — 타임존 변환 절대 금지
-        $now = new DateTime($_POST['client_datetime']);
-    } else {
-        $now = new DateTime(); // 서버 시간
-    }
 
-$current_time = $now->format('H:i:s');
-$today_date = $now->format('Y-m-d');
+    // PC 기준 날짜/시간 (JS에서 전달)
+    $pc_datetime = $_POST['pc_datetime']; // 예: 2025-01-12 02:15:00
 
-    // 근무 기준 (오전/오후 컷오프)
-    $cutoff_leave = '17:30:00'; // 퇴근 시작 시점
-    $cutoff_morning = '08:30:00'; // 오전 기준
+    // 근무일자 (08:30 기준)
+    $today = getWorkDateFromDatetime($pc_datetime);
 
-    // effective_date 계산:
-    // - 현재 시간이 17:30 이상이면 당일
-    // - 현재 시간이 00:00 ~ 07:59 이면 전일
-    // - 그 외(08:00~17:29)는 당일
-    if ($current_time >= $cutoff_leave) {
-        $effective_date = $today_date;
-    } elseif ($current_time < $cutoff_morning) {
-        $effective_date = date('Y-m-d', strtotime("$today_date -1 day"));
-    } else {
-        $effective_date = $today_date;
-    }
-
-    // DB에 저장할 date는 $effective_date, time은 실제 시각($current_time)
-    // 1) 해당 effective_date + user_id 로 기존 기록 있는지 확인
+    // 실제 체크 시각 (PC 기준)
+    $current_time = substr($pc_datetime, 11); // HH:ii:ss
+    // 1) 오늘 날짜 + user_id 로 기존 기록 있는지 확인
     $stmt = $conn->prepare("
-        SELECT id FROM check_out
+        SELECT * FROM check_out
         WHERE user_id = ? AND date = ?
         LIMIT 1
     ");
-    $stmt->bind_param("ss", $user_id, $effective_date);
+    $stmt->bind_param("ss", $user_id, $today);
     $stmt->execute();
     $stmt->store_result();
     $record_exists = $stmt->num_rows > 0;
     $stmt->close();
-
+    // 2) 있으면 → UPDATE (시간만 갱신)
     if ($record_exists) {
-        // 기존 레코드가 있으면 시간 업데이트 (더 늦은 시간으로 덮어쓰기)
-        // -> 단, DB에 이미 있는 time보다 최신(=더 늦은) 시각이면 업데이트 하도록 안전장치 추가 가능
         $stmt = $conn->prepare("
             UPDATE check_out
             SET time = ?, user_name = ?
             WHERE user_id = ? AND date = ?
         ");
-        $stmt->bind_param("ssss", $current_time, $user_name, $user_id, $effective_date);
+        $stmt->bind_param("ssss", $current_time, $user_name, $user_id, $today);
         $stmt->execute();
         $stmt->close();
-    } else {
-        // 없으면 새로 삽입
+    } 
+    // 3) 없으면 → INSERT
+    else {
         $stmt = $conn->prepare("
             INSERT INTO check_out (user_id, user_name, date, time)
             VALUES (?, ?, ?, ?)
         ");
-        $stmt->bind_param("ssss", $user_id, $user_name, $effective_date, $current_time);
+        $stmt->bind_param("ssss", $user_id, $user_name, $today, $current_time);
         $stmt->execute();
         $stmt->close();
     }
+    $_SESSION['success'] = "퇴실 체크 완료!";
 
-    $success = "퇴실 체크 완료!";
+// redirect
+header("Location: ".$_SERVER['PHP_SELF']."?date=".$today."&week=0");
+exit;
 }
 
 if (isset($_POST['download_month_csv'])) {
@@ -159,11 +178,16 @@ if (isset($_POST['download_month_csv'])) {
 
         // 해당 날짜의 최종 퇴실자 1명 조회
         $stmt = $conn->prepare("
-        SELECT user_name, time 
-        FROM check_out
-        WHERE date = ?
-        ORDER BY (CASE WHEN time < '08:00:00' THEN ADDTIME(time,'24:00:00') ELSE time END) DESC
-        LIMIT 1
+            SELECT user_name, time 
+            FROM check_out
+            WHERE date = ?
+            ORDER BY
+    CASE
+        WHEN time < '08:30:00'
+        THEN CONCAT(DATE_ADD(date, INTERVAL 1 DAY), ' ', time)
+        ELSE CONCAT(date, ' ', time)
+    END DESC
+LIMIT 1
         ");
         $stmt->bind_param("s", $d);
         $stmt->execute();
@@ -171,9 +195,15 @@ if (isset($_POST['download_month_csv'])) {
         $row = $result->fetch_assoc();
 
         if ($row) {
-            $csv_data .= "$d,{$row['user_name']},{$row['time']}\n";
+            $weekday = ['일','월','화','수','목','금','토'][$date->format('w')];
+$display_date = $d . "($weekday)";
+
+$csv_data .= "$display_date,{$row['user_name']},{$row['time']}\n";
         } else {
-            $csv_data .= "$d,,\n"; // 데이터 없는 날짜는 빈 칸
+            $weekday = ['일','월','화','수','목','금','토'][$date->format('w')];
+$display_date = $d . "($weekday)";
+
+$csv_data .= "$display_date,,\n"; // 데이터 없는 날짜는 빈 칸
         }
     }
 
@@ -188,20 +218,19 @@ if (isset($_POST['download_month_csv'])) {
     exit;
 }
 
-// 날짜 선택 (미래 날짜 차단)
-$selected_date = isset($_GET['date']) ? $_GET['date'] : $today;
-// 미래 날짜인 경우 오늘로 리다이렉트
-if (strtotime($selected_date) > strtotime($today)) {
-    header("Location: ?date=" . $today);
-    exit;
-}
 // 전체 퇴실 기록 조회 (선택한 날짜 기준)
 $list = $conn->query("
     SELECT *
     FROM check_out
-    WHERE date = '$selected_date'
-    ORDER BY (CASE WHEN time < '08:00:00' THEN ADDTIME(time,'24:00:00') ELSE time END) DESC
+    WHERE date='$selected_date'
+    ORDER BY
+        CASE
+            WHEN time < '08:30:00'
+            THEN CONCAT(DATE_ADD(date, INTERVAL 1 DAY), ' ', time)
+            ELSE CONCAT(date, ' ', time)
+        END DESC
 ")->fetch_all(MYSQLI_ASSOC);
+
 // 이전/다음 날짜 계산
 $prev_date = date('Y-m-d', strtotime($selected_date . ' -1 day'));
 $next_date = date('Y-m-d', strtotime($selected_date . ' +1 day'));
@@ -454,6 +483,49 @@ h1{
         right:15px;
         font-size:1.2rem;
     }
+    
+    /* 최종 퇴실 기록 모바일 헤더 */
+    .daily-header {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        background: #e0e7ff;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--primary);
+    }
+    
+    .daily-header > div {
+        text-align: center;
+    }
+    
+    /* 최종 퇴실 기록 모바일 아이템 */
+    .daily-record .record-item {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        align-items: center;
+    }
+    
+    .daily-record .record-item .name {
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+    }
+    
+    .daily-record .record-item .time {
+        text-align: center;
+        color: #374151;
+        font-size: 13px;
+        font-weight: 700;
+    }
 }
 
 /* 태블릿 최적화 */
@@ -464,64 +536,66 @@ h1{
 }
 
 /* 최종 퇴실자 조회(Weekly Final) 모바일 스타일 전용 */
-.weekly-final .record-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0px;
-}
+@media (max-width: 640px) {
+    .weekly-final .record-item {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        align-items: center;
+    }
+    
+    .weekly-final .record-item .date-col {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1.2;
+    }
+    
+    .weekly-final .record-item .day-text {
+        font-size: 11px;
+        color: #6b7280;
+        font-weight: 400;
+    }
+    
+    .weekly-final .record-item .name-col {
+        font-size: 13px;
+        font-weight: 600;
+        text-align: center;
+    }
 
-.weekly-final .record-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center; /* 세로 가운데 정렬 */
-    padding: 8px 12px;
-    background: #fff; /* 배경 흰색 */
-    border-bottom: 1px solid #e5e7eb; /* 아래 구분선 */
-    font-size: 0.85rem; /* 폰트 작게 */
-    gap: 8px;
+    .weekly-final .record-item .time-col {
+        text-align: center;
+        color: #374151;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    
+    /* 모바일 주간 조회 헤더 */
+    .weekly-header {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 8px;
+        background: #e0e7ff;
+        padding: 10px 12px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--primary);
+    }
+    
+    .weekly-header > div {
+        text-align: center;
+    }
 }
-
-/* 각 열 고정 너비 */
-.weekly-final .record-item .date-text {
-    flex: 0 0 40%; /* 날짜 40% */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.weekly-final .record-item .user-text {
-    flex: 0 0 35%; /* 이름 35% */
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.weekly-final .record-item .time {
-    flex: 0 0 25%; /* 시간 25% */
-    text-align: right;
-}
-
-/* 모바일 헤더 추가 */
-.weekly-final .record-list .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center; /* 세로 가운데 정렬 */
-    padding: 8px 12px;
-    background: #fff;
-    border-top: 1px solid #e5e7eb;
-    border-bottom: 1px solid #e5e7eb;
-    font-weight: 500; /* 굵기 조금만 */
-    font-size: 0.85rem; /* 데이터보다 약간 작게 */
-    margin-bottom: 0; /* 데이터와 붙게 */
-}
-
-.weekly-final .record-list .header div {
-    text-align: center;
-}
-
-.weekly-final .record-list .header .date-text { flex: 0 0 40%; text-align: left; }
-.weekly-final .record-list .header .user-text { flex: 0 0 35%; text-align: center; }
-.weekly-final .record-list .header .time { flex: 0 0 25%; text-align: right; }
 
 /* 월 선택 input 크기 확대 */
 input[type="month"] {
@@ -531,45 +605,54 @@ input[type="month"] {
     border-radius: 8px;
     background-color: #fff;
 }
-.section-wrapper {
-    width: 100%;
-    max-width: 800px;
-    margin: 0px auto;
-    margin-top: 10px !important;
+
+/* 날짜/시간 숫자만 monospace */
+.date-mono,
+.time-mono {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
 }
 </style>
 </head>
 <body>
 <h1>🕖 최종 퇴실자</h1>
 <div class="date-info" id="top-date-fixed">
-    📅 <?= date('Y년 m월 d일 (') . ['일','월','화','수','목','금','토'][date('w')] . ')' ?>
+    📅 <?= 
+    date('Y년 m월 d일', strtotime($today)) .
+    ' (' .
+    ['일','월','화','수','목','금','토'][date('w', strtotime($today))] .
+    ')'
+?>
 </div>
 <div class="container">
     <div class="card">
         <h2>최종 퇴실 체크</h2>
         <form method="post" id="checkoutForm">
+<input type="hidden" name="pc_datetime" id="pc_datetime">
             <div class="checkbox-group">
                 <?php foreach($items as $item): ?>
                     <label><input type="checkbox" class="check-item"> <?= htmlspecialchars($item) ?></label>
                 <?php endforeach; ?>
             </div>
-            <input type="hidden" name="client_datetime" id="client_datetime" value="">
             <button class="btn" type="submit" name="checkout" id="checkoutBtn" disabled>최종 퇴실 체크</button>
         </form>
-        <?php if (isset($success)) echo "<p style='color:var(--success);margin-top:10px;font-weight:600;'>$success</p>"; ?>
+        <?php if (isset($_SESSION['success'])): ?>
+    <p style="color:var(--success); margin-top:10px; font-weight:600;">
+        <?= $_SESSION['success'] ?>
+    </p>
+<?php unset($_SESSION['success']); endif; ?>
     </div>
+    
     <div class="card">
         <h2>최종 퇴실 기록</h2>
         <div id="date-navigation">
-            <a href="?date=<?= $prev_date ?>"><button>&lt;</button></a>
+            <a href="?date=<?= $prev_date ?>&week=<?= $week_offset ?>"><button>&lt;</button></a>
             <span class="selected-date"><?= date('Y-m-d', strtotime($selected_date)) ?> (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($selected_date))] ?>)</span>
             <?php if ($is_today): ?>
                 <button disabled>&gt;</button>
             <?php else: ?>
-                <a href="?date=<?= $next_date ?>"><button>&gt;</button></a>
+                <a href="?date=<?= $next_date ?>&week=<?= $week_offset ?>"><button>&gt;</button></a>
             <?php endif; ?>
         </div>
-        </html>
         <?php if(count($list) === 0): ?>
              <p style="text-align:center; color:#6b7280; font-weight:600; margin-top:10px;">퇴실 기록이 없습니다.</p>
         <?php else: ?>
@@ -583,163 +666,219 @@ input[type="month"] {
                 <?php foreach ($list as $row): ?>
                 <tr>
                     <td><?= htmlspecialchars($row['user_name']) ?></td>
-                    <td><?= htmlspecialchars($row['time']) ?></td>
+                    <td><span class="time-mono"><?= htmlspecialchars($row['time']) ?></span></td>
                 </tr>
                 <?php endforeach; ?>
             </table>
         </div>
         
         <!-- 모바일: 카드형 -->
-        <div class="record-list">
-            <?php foreach ($list as $row): ?>
-            <div class="record-item">
-                <div class="name"><?= htmlspecialchars($row['user_name']) ?></div>
-                <div class="time"><?= htmlspecialchars($row['time']) ?></div>
+        <div class="daily-record">
+            <div class="record-list">
+                <!-- 모바일 헤더 추가 -->
+                <div class="daily-header">
+                    <div>이름</div>
+                    <div>시간</div>
+                </div>
+                
+                <?php foreach ($list as $row): ?>
+                <div class="record-item">
+                    <div class="name"><?= htmlspecialchars($row['user_name']) ?></div>
+                    <div class="time"><span class="time-mono"><?= htmlspecialchars($row['time']) ?></span></div>
+                </div>
+                <?php endforeach; ?>
             </div>
-            <?php endforeach; ?>
         </div>
         <?php endif; ?>
     </div>
-<!-- ⭐ 주간 조회 (팀장님 전용) -->
-<?php if ($user_level == 9): ?>
-<div class="card">
-    <h2>주간 최종 퇴실자 조회</h2>
 
-    <!-- 주간 이동 네비 -->
-    <div id="date-navigation" style="margin-bottom: 18px;">
-        <a href="?week=<?= $week_offset - 1 ?>">
-            <button>&lt;</button>
-        </a>
+    <!-- ⭐ 주간 조회 (팀장님 전용) -->
+    <?php if ($user_level == 9): ?>
+    <div class="card">
+        <h2>주간 최종 퇴실자 조회</h2>
 
-        <span class="selected-date">
-            <?= date('Y-m-d', strtotime($target_monday)) ?>
-            (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_monday))] ?>)
-            ~
-            <?= date('Y-m-d', strtotime($target_sunday)) ?>
-            (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_sunday))] ?>)
-        </span>
-
-        <?php if ($is_current_week): ?>
-            <button disabled>&gt;</button>
-        <?php else: ?>
-            <a href="?week=<?= $week_offset + 1 ?>">
-                <button>&gt;</button>
+        <!-- 주간 이동 네비 -->
+        <div id="date-navigation" style="margin-bottom: 18px;">
+            <a href="?date=<?= $selected_date ?>&week=<?= $week_offset - 1 ?>">
+                <button>&lt;</button>
             </a>
-        <?php endif; ?>
-    </div>
 
-    <!-- 주간 테이블 -->
-    <div class="table-wrapper">
-        <table class="table">
-            <tr>
-                <th>날짜</th>
-                <th>최종 퇴실자</th>
-                <th>시간</th>
-            </tr>
+            <span class="selected-date">
+                <?= date('Y-m-d', strtotime($target_monday)) ?>
+                (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_monday))] ?>)
+                ~
+                <?= date('Y-m-d', strtotime($target_sunday)) ?>
+                (<?= ['일','월','화','수','목','금','토'][date('w', strtotime($target_sunday))] ?>)
+            </span>
 
-            <?php
-            // 월요일부터 일요일까지 순서대로 출력
-            for ($i = 0; $i < 7; $i++):
-                $day = date('Y-m-d', strtotime("$target_monday +$i days"));
-                $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
-
-                if (isset($final_weekly[$day])) {
-                    $row = $final_weekly[$day];
-                    $uname = htmlspecialchars($row['user_name']);
-                    $utime = htmlspecialchars($row['time']);
-                } else {
-                    $uname = "";
-                    $utime = "";
-                }
-            ?>
-            <tr>
-                <td><?= $day ?> (<?= $w ?>)</td>
-                <td><?= $uname ?></td>
-                <td><?= $utime ?></td>
-            </tr>
-            <?php endfor; ?>
-        </table>
-    </div>
-
-<!-- 모바일 카드 형태 -->
-<div class="weekly-final">
-    <div class="record-list">
-        <!-- 헤더 -->
-        <div class="header">
-            <div class="date-text">날짜</div>
-            <div class="user-text">최종 퇴실자</div>
-            <div class="time">시간</div>
+            <?php if ($is_current_week): ?>
+                <button disabled>&gt;</button>
+            <?php else: ?>
+                <a href="?date=<?= $selected_date ?>&week=<?= $week_offset + 1 ?>">
+                    <button>&gt;</button>
+                </a>
+            <?php endif; ?>
         </div>
 
-        <!-- 데이터 -->
-        <?php for ($i = 0; $i < 7; $i++):
-            $day = date('Y-m-d', strtotime("$target_monday +$i days"));
-            $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+        <!-- 주간 테이블 -->
+        <div class="table-wrapper">
+            <table class="table">
+                <tr>
+                    <th>날짜</th>
+                    <th>최종 퇴실자</th>
+                    <th>시간</th>
+                </tr>
 
-            if (isset($final_weekly[$day])) {
-                $row = $final_weekly[$day];
-                $uname = htmlspecialchars($row['user_name']);
-                $utime = htmlspecialchars($row['time']);
-            } else {
-                $uname = "";
-                $utime = "";
-            }
-        ?>
-        <div class="record-item">
-            <div class="date-text"><?= $day ?> (<?= $w ?>)</div>
-            <div class="user-text"><?= $uname ?></div>
-            <div class="time"><?= $utime ?></div>
+                <?php
+                // 월요일부터 일요일까지 순서대로 출력
+                for ($i = 0; $i < 7; $i++):
+                    $day = date('Y-m-d', strtotime("$target_monday +$i days"));
+                    $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+
+                    if (isset($final_weekly[$day])) {
+                        $row = $final_weekly[$day];
+                        $uname = htmlspecialchars($row['user_name']);
+                        $utime = htmlspecialchars($row['time']);
+                    } else {
+                        $uname = "";
+                        $utime = "";
+                    }
+                ?>
+                <tr>
+                    <td><span class="date-mono"><?= $day ?></span> (<?= $w ?>)</td>
+                    <td><?= $uname ?></td>
+                    <td><span class="time-mono"><?= $utime ?></span></td>
+                </tr>
+                <?php endfor; ?>
+            </table>
         </div>
-        <?php endfor; ?>
+
+        <!-- 모바일 카드 형태 -->
+        <div class="weekly-final">
+            <div class="record-list">
+                <!-- 모바일 헤더 추가 -->
+                <div class="weekly-header">
+                    <div>날짜</div>
+                    <div>이름</div>
+                    <div>시간</div>
+                </div>
+                
+                <?php for ($i = 0; $i < 7; $i++):
+                    $day = date('Y-m-d', strtotime("$target_monday +$i days"));
+                    $w = ['일','월','화','수','목','금','토'][date('w', strtotime($day))];
+
+                    if (isset($final_weekly[$day])) {
+                        $row = $final_weekly[$day];
+                        $uname = htmlspecialchars($row['user_name']);
+                        $utime = htmlspecialchars($row['time']);
+                    } else {
+                        $uname = "";
+                        $utime = "";
+                    }
+                ?>
+                <div class="record-item">
+                    <div class="date-col">
+                        <span class="date-mono"><?= $day ?></span>
+                        <span class="day-text">(<?= $w ?>)</span>
+                    </div>
+                    <div class="name-col"><?= $uname ?></div>
+                    <div class="time-col"><span class="time-mono"><?= $utime ?></span></div>
+                </div>
+                <?php endfor; ?>
+            </div>
+        </div>
     </div>
-</div>
-<?php endif; ?>
-</div>
-<div class="section-wrapper">
+    <?php endif; ?>
+
+    <!-- ⭐ 월간 CSV 다운로드 (항상 표시) -->
     <div class="card">
         <h2>월간 최종 퇴실자 CSV 다운로드</h2>
         <form method="post">
-            <input type="month" name="csv_month" required>
+            <input
+    type="month"
+    name="csv_month"
+    value="<?= date('Y-m', strtotime($today)) ?>"
+    required
+>
             <br><br>
             <button class="btn" type="submit" name="download_month_csv">CSV 다운로드</button>
         </form>
     </div>
-</div>
+
+</div> <!-- container 닫는 태그 -->
 
 <button class="back-btn" onclick="location.href='index.php'" title="처음으로 돌아가기">🏠</button>
+
 <script>
-const checkboxes = document.querySelectorAll('.check-item');
-const checkoutBtn = document.getElementById('checkoutBtn');
-checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-        const allChecked = Array.from(checkboxes).every(c => c.checked);
-        checkoutBtn.disabled = !allChecked;
-    });
-});
-document.getElementById('checkoutForm').addEventListener('submit', function(e){
-    // 1) 클라이언트 기기의 로컬 시간(연-월-일 시:분:초, 사용자의 PC/모바일 시간 기준)을 채운다
+document.cookie = "pc_datetime_now=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+// ✅ 페이지 로드시 PC 시간 → 쿠키 저장 (화면 기준 날짜용)
+(function setPcDatetimeCookie() {
     const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const clientLocal = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-    // hidden input에 값 설정
-    const hid = document.getElementById('client_datetime');
-    if (hid) hid.value = clientLocal;
-
-    // 2) 기존 확인창 유지
-    if(!confirm('최종 퇴실 체크를 하시겠습니까?')) {
-        e.preventDefault();
-    }
-    // (주의) 확인을 누르면 폼이 제출되고 서버에서는 $_POST['client_datetime']로 받습니다.
-});
-// ▼▼ 현재 월을 input[type="month"] 기본값으로 지정 ▼▼
-const monthInput = document.querySelector('input[name="csv_month"]');
-if (monthInput) {
-    const now = new Date();
     const yyyy = now.getFullYear();
     const mm = String(now.getMonth() + 1).padStart(2, '0');
-    monthInput.value = `${yyyy}-${mm}`;
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    const pcDatetime = `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+
+    document.cookie = `pc_datetime_now=${pcDatetime}; path=/`;
+})();
+// 체크박스 상태를 sessionStorage에 저장
+const checkboxes = document.querySelectorAll('.check-item');
+const checkoutBtn = document.getElementById('checkoutBtn');
+const formKey = 'checkout_checkboxes';
+
+// 페이지 로드 시 저장된 체크박스 상태 복원
+window.addEventListener('DOMContentLoaded', () => {
+    const saved = sessionStorage.getItem(formKey);
+    if (saved) {
+        const states = JSON.parse(saved);
+        checkboxes.forEach((cb, idx) => {
+            if (states[idx]) cb.checked = true;
+        });
+        updateButton();
+    }
+});
+
+// 체크박스 상태 변경 시 저장
+checkboxes.forEach((cb, idx) => {
+    cb.addEventListener('change', () => {
+        const states = Array.from(checkboxes).map(c => c.checked);
+        sessionStorage.setItem(formKey, JSON.stringify(states));
+        updateButton();
+    });
+});
+
+function updateButton() {
+    const allChecked = Array.from(checkboxes).every(c => c.checked);
+    checkoutBtn.disabled = !allChecked;
 }
+
+// 폼 제출 시 저장된 상태 삭제
+document.getElementById('checkoutForm').addEventListener('submit', function(e){
+    if(!confirm('최종 퇴실 체크를 하시겠습니까?')) {
+        e.preventDefault();
+    } else {
+        sessionStorage.removeItem(formKey);
+    }
+});
+
+document.getElementById('checkoutForm').addEventListener('submit', function () {
+    const now = new Date();
+
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mi = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+
+    document.getElementById('pc_datetime').value =
+        `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+});
 </script>
 </body>
 </html>
