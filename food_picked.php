@@ -25,7 +25,26 @@ if($conn->connect_error){
 }
 
 // 오늘 날짜
-$today = date('Y-m-d');
+//$today = date('Y-m-d');
+
+if (isset($_COOKIE['pc_datetime_now'])) {
+    $current_time = substr($_COOKIE['pc_datetime_now'], 11, 5);
+} else {
+    $current_time = date('H:i');
+}
+
+// PC 시간 기준 날짜
+if (isset($_COOKIE['pc_datetime_now'])) {
+    $pc_datetime = $_COOKIE['pc_datetime_now'];
+    $today = substr($pc_datetime, 0, 10);
+    $timestamp = strtotime($today);
+} else {
+    $today = date('Y-m-d');
+    $timestamp = time();
+}
+
+// 수령예정 버튼 활성 시간 (00:00 ~ 12:00)
+$pickup_allowed = (strtotime($current_time) <= strtotime("12:00"));
 
 // 수령 체크 처리
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_pickup') {
@@ -311,9 +330,14 @@ if (!$user_order) {
 </head>
 <body>
     <h1>🍱 도시락 수령 확인</h1>
-    <div class="date-info">📅 <?php echo date('Y년 m월 d일 (') . ['일','월','화','수','목','금','토'][date('w')] . '요일)'; ?></div>
+    <div class="date-info">📅 <?php
+$days = ['일','월','화','수','목','금','토'];
+echo date('Y년 m월 d일 ', $timestamp) . '(' . $days[date('w', $timestamp)] . '요일)';
+?>
     <div class="info-notice">
-        ℹ️ <strong></strong> 기본적으로 모두 수령하는 것으로 간주됩니다. <span style="color: var(--danger); font-weight: 600;">수령이 불가능한 경우</span> 체크해 주세요.
+        ℹ️ <strong></strong> 기본적으로 모두 수령하는 것으로 간주됩니다. 
+<span style="color: var(--danger); font-weight: 600;">수령이 불가능한 경우</span><br> 
+<span style="color: var(--danger); font-weight: 600; text-decoration: underline;">오후 12시 전까지</span> 체크해 주세요.
     </div>
 
     <div class="container">
@@ -337,7 +361,7 @@ if (!$user_order) {
                             data-user="<?php echo $user_id; ?>"
                             data-status="<?php echo $user_order['lunch_picked']; ?>"
                             title="<?php echo $user_order['lunch_picked'] ? '수령불가 상태입니다. 클릭하면 수령예정으로 변경됩니다.' : '수령예정 상태입니다. 수령이 불가능하면 클릭하세요.'; ?>"
-                            <?php echo (!$user_order || !$user_order['lunch']) ? 'disabled' : ''; ?>>
+                            <?php echo (!$user_order || !$user_order['lunch'] || !$pickup_allowed) ? 'disabled' : ''; ?>>
                         <?php echo $user_order['lunch_picked'] ? '수령불가 ❌' : '수령예정 ✅'; ?>
                     </button>
                 </div>
@@ -355,7 +379,7 @@ if (!$user_order) {
                             data-user="<?php echo $user_id; ?>"
                             data-status="<?php echo $user_order['lunch_salad_picked']; ?>"
                             title="<?php echo $user_order['lunch_salad_picked'] ? '수령불가 상태입니다. 클릭하면 수령예정으로 변경됩니다.' : '수령예정 상태입니다. 수령이 불가능하면 클릭하세요.'; ?>"
-                            <?php echo (!$user_order || !$user_order['lunch_salad']) ? 'disabled' : ''; ?>>
+                            <?php echo (!$user_order || !$user_order['lunch_salad'] || !$pickup_allowed) ? 'disabled' : ''; ?>>
                         <?php echo $user_order['lunch_salad_picked'] ? '수령불가 ❌' : '수령예정 ✅'; ?>
                     </button>
                 </div>
@@ -373,7 +397,7 @@ if (!$user_order) {
                             data-user="<?php echo $user_id; ?>"
                             data-status="<?php echo $user_order['dinner_salad_picked']; ?>"
                             title="<?php echo $user_order['dinner_salad_picked'] ? '수령불가 상태입니다. 클릭하면 수령예정으로 변경됩니다.' : '수령예정 상태입니다. 수령이 불가능하면 클릭하세요.'; ?>"
-                            <?php echo (!$user_order || !$user_order['dinner_salad']) ? 'disabled' : ''; ?>>
+                            <?php echo (!$user_order || !$user_order['dinner_salad'] || !$pickup_allowed) ? 'disabled' : ''; ?>>
                         <?php echo $user_order['dinner_salad_picked'] ? '수령불가 ❌' : '수령예정 ✅'; ?>
                     </button>
                 </div>
@@ -496,6 +520,29 @@ if (!$user_order) {
     <div id="messageContainer"></div>
 
     <script>
+    document.cookie = "pc_datetime_now=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+    (function setPcDatetimeCookie() {
+        const now = new Date();
+
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mi = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+
+        const pcDatetime = `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+
+        document.cookie = `pc_datetime_now=${pcDatetime}; path=/`;
+    
+        // ⭐ 쿠키 생성 후 새로고침
+        if (!sessionStorage.getItem("pc_time_loaded")) {
+            sessionStorage.setItem("pc_time_loaded", "1");
+            location.reload();
+        }
+    })();
+
         // 메시지 표시 함수
         function showMessage(text, type = 'info') {
             const messageContainer = document.getElementById('messageContainer');
