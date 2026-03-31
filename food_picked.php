@@ -43,8 +43,8 @@ if (isset($_COOKIE['pc_datetime_now'])) {
     $timestamp = time();
 }
 
-// 수령예정 버튼 활성 시간 (00:00 ~ 12:00)
-$pickup_allowed = (strtotime($current_time) <= strtotime("12:00"));
+// 수령예정 버튼 활성 시간 (00:00 ~ 11:40)
+$pickup_allowed = (strtotime($current_time) <= strtotime("11:40"));
 
 // 수령 체크 처리
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_pickup') {
@@ -337,7 +337,7 @@ echo date('Y년 m월 d일 ', $timestamp) . '(' . $days[date('w', $timestamp)] . 
     <div class="info-notice">
         ℹ️ <strong></strong> 기본적으로 모두 수령하는 것으로 간주됩니다. 
 <span style="color: var(--danger); font-weight: 600;">수령이 불가능한 경우</span><br> 
-<span style="color: var(--danger); font-weight: 600; text-decoration: underline;">오후 12시 전까지</span> 체크해 주세요.
+<span style="color: var(--danger); font-weight: 600; text-decoration: underline;">11시 40분까지</span> 체크해 주세요.
     </div>
 
     <div class="container">
